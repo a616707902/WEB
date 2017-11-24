@@ -1,0 +1,79 @@
+<b:beans xmlns="http://www.springframework.org/schema/security"
+         xmlns:b="http://www.springframework.org/schema/beans"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.springframework.org/schema/beans
+		http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+		http://www.springframework.org/schema/security
+		http://www.springframework.org/schema/security/spring-security.xsd">
+
+    <http entry-point-ref="casEntryPoint">
+        <intercept-url pattern="/**" access="hasRole('ROLE_USER')"/>
+        <custom-filter position="CAS_FILTER" ref="casFilter"/>
+        <logout logout-success-url="/none/logoutSuccess"/>
+        <custom-filter ref="requestSingleLogoutFilter" before="LOGOUT_FILTER"/>
+        <custom-filter ref="singleLogoutFilter" before="CAS_FILTER"/>
+        <csrf disabled="true"/>
+    </http>
+
+    <b:bean id="serviceProperties" class="org.springframework.security.cas.ServiceProperties">
+        <b:property name="service" value="${system.app.root}/login/cas"/>
+        <b:property name="sendRenew" value="false"/>
+    </b:bean>
+
+    <b:bean id="casFilter" class="org.springframework.security.cas.web.CasAuthenticationFilter">
+        <b:property name="authenticationManager" ref="authenticationManager"/>
+        <b:property name="proxyGrantingTicketStorage" ref="pgtStorage"/>
+        <b:property name="proxyReceptorUrl" value="/login/cas/proxyreceptor"/>
+    </b:bean>
+
+    <b:bean id="casEntryPoint" class="org.springframework.security.cas.web.CasAuthenticationEntryPoint">
+        <b:property name="loginUrl" value="${system.cas.root}/login"/>
+        <b:property name="serviceProperties" ref="serviceProperties"/>
+    </b:bean>
+
+    <authentication-manager alias="authenticationManager">
+        <authentication-provider ref="casAuthenticationProvider"/>
+    </authentication-manager>
+
+    <b:bean id="casAuthenticationProvider"
+            class="org.springframework.security.cas.authentication.CasAuthenticationProvider">
+        <b:property name="authenticationUserDetailsService">
+            <b:bean class="org.springframework.security.core.userdetails.UserDetailsByNameServiceWrapper">
+                <b:constructor-arg ref="casUserService"/>
+            </b:bean>
+        </b:property>
+        <b:property name="serviceProperties" ref="serviceProperties"/>
+        <!--<b:property name="ticketValidator">-->
+        <!--<b:bean class="org.jasig.cas.client.validation.Cas20ServiceTicketValidator">-->
+        <!--<b:constructor-arg index="0" value="${system.cas.root}"/>-->
+        <!--</b:bean>-->
+        <!--</b:property>-->
+        <b:property name="ticketValidator">
+            <b:bean class="org.jasig.cas.client.validation.Cas20ProxyTicketValidator">
+                <b:constructor-arg value="${system.cas.root}"/>
+                <b:property name="proxyCallbackUrl" value="${system.app.root}/login/cas/proxyreceptor"/>
+                <b:property name="proxyGrantingTicketStorage" ref="pgtStorage"/>
+            </b:bean>
+        </b:property>
+        <b:property name="key" value="an_id_for_this_auth_provider_only"/>
+    </b:bean>
+
+    <user-service id="casUserService">
+        <user name="admin" password="1" authorities="ROLE_USER"/>
+    </user-service>
+
+
+    <!-- This filter handles a Single Logout Request from the CAS Server -->
+    <b:bean id="singleLogoutFilter" class="org.jasig.cas.client.session.SingleSignOutFilter"/>
+
+    <!-- This filter redirects to the CAS Server to signal Single Logout should be performed -->
+    <b:bean id="requestSingleLogoutFilter" class="org.springframework.security.web.authentication.logout.LogoutFilter">
+        <b:constructor-arg value="${system.cas.root}/logout"/>
+        <b:constructor-arg>
+            <b:bean class="org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler"/>
+        </b:constructor-arg>
+        <b:property name="filterProcessesUrl" value="/logout/cas"/>
+    </b:bean>
+
+    <b:bean id="pgtStorage" class="org.jasig.cas.client.proxy.ProxyGrantingTicketStorageImpl"/>
+</b:beans>
